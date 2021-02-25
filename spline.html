@@ -31,11 +31,13 @@ canvas {
     border-radius: 10px;
 }
 
-label {
+label, a {
     cursor: pointer;
+    color: black;
 }
-label:hover {
+label:hover, a:hover {
     text-decoration: underline;
+    color: blue;
 }
 </style>
     </head>
@@ -43,9 +45,10 @@ label:hover {
         <canvas id="canvas" width="900" height="720"></canvas>
         <div>
             <input type="checkbox" id="toggle_control_poly">
-            <label for="toggle_control_poly">Покажи контролния полигон</label>
+            <label for="toggle_control_poly">Show the control polygon</label>
         </div>
-        <div>Ляв бутон създава и мести точки, десен бутон трие</div>
+        <div>Left mouse button creates and moves points, right mouse button deletes them</div>
+        <div style="margin-top: 1.5rem;">Go back to <a href="https://alexvitkov.github.io">alexvitkov.github.io</a></div>
 
     <script>
 
