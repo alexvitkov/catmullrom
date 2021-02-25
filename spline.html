@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <title>Catmull-Rom</title>
+
+<style>
+html, body {
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+    background: #eee;
+
+    -webkit-user-select: none; /* Safari */
+    -ms-user-select: none; /* IE 10 and IE 11 */
+    user-select: none; /* Standard syntax */
+}
+
+body {
+    font-family: sans-serif;
+    font-size: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+}
+
+canvas {
+    background: white;
+    border: 2px solid #ccc;
+    border-radius: 10px;
+}
+
+label {
+    cursor: pointer;
+}
+label:hover {
+    text-decoration: underline;
+}
+</style>
+    </head>
+    <body>
+        <canvas id="canvas" width="900" height="720"></canvas>
+        <div>
+            <input type="checkbox" id="toggle_control_poly">
+            <label for="toggle_control_poly">Покажи контролния полигон</label>
+        </div>
+        <div>Ляв бутон създава и мести точки, десен бутон трие</div>
+
+    <script>
+
+var canvas = document.getElementById("canvas");
+var ctx = canvas.getContext("2d");
+var show_control_polygon = false;
+
+var toggle_control_poly = document.getElementById("toggle_control_poly");
+toggle_control_poly.onchange = toggled_control_poly;
+
+
+function toggled_control_poly(e) {
+    show_control_polygon = toggle_control_poly.checked;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    highlight_closest_point();
+    draw_catmull_rom();
+}
+
+function lerp2(start, end, t) {
+    var r = 1 - t;
+    return [
+        start[0] * t + end[0] * r,
+        start[1] * t + end[1] * r
+    ];
+}
+
+function draw_point(p) { ctx.beginPath();
+    ctx.arc(p[0], p[1], 5, 0, 2 * Math.PI);
+    ctx.fill();
+}
+
+function draw_line(p1, p2) {
+    ctx.beginPath();
+    ctx.moveTo(p1[X], p1[Y]);
+    ctx.lineTo(p2[X], p2[Y]);
+    ctx.stroke();
+}
+
+function draw_quadratic(p1, p2, p3) {
+    var nsegments = 30;
+
+    ctx.beginPath();
+    ctx.moveTo(p1[X], p1[Y]);
+
+    for (var i = 0; i < nsegments; i++) {
+        var t = 1 - i / (nsegments - 1);
+
+        var p4 = lerp2(p1, p2, t);
+        var p5 = lerp2(p2, p3, t);
+
+        var bz = lerp2(p4, p5, t)
+
+        ctx.lineTo(bz[X], bz[Y]);
+    }
+
+    ctx.stroke();
+}
+
+function draw_cubic(p1, p2, p3, p4) {
+    var nsegments = 30;
+
+    ctx.beginPath();
+    ctx.moveTo(p1[0], p1[1]);
+
+    for (var i = 0; i < nsegments; i++) {
+        var t = 1 - i / (nsegments - 1);
+
+        var p5 = lerp2(p1, p2, t);
+        var p6 = lerp2(p2, p3, t);
+        var p7 = lerp2(p3, p4, t);
+
+        var p8 = lerp2(p5, p6, t);
+        var p9 = lerp2(p6, p7, t);
+
+        var bz = lerp2(p8, p9, t)
+
+        ctx.lineTo(bz[X], bz[Y]);
+    }   
+
+    ctx.stroke();
+}
+
+var points = [];
+var closestPoint = 0;
+
+var moving = -1;
+
+const X = 0;
+const Y = 1;
+
+var move_dist = 100;
+
+function dist(p1, p2) {
+    var dx = p1[0] - p2[0];
+    var dy = p1[1] - p2[1];
+    return Math.sqrt(dx * dx + dy * dy);
+}
+
+canvas.onmousedown = function(e) {
+    md = true;  
+
+    var x = e.x - canvas.getBoundingClientRect().left;
+    var y = e.y - canvas.getBoundingClientRect().top;
+    highlight_closest_point(x, y);
+
+    // Right click, delete the closest point
+    if (e.button == 2) {
+        if (closestPoint >= 0) {
+            points.splice(closestPoint, 1);
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            highlight_closest_point();
+            draw_catmull_rom();
+        }
+    }
+    // Left click, start dragging
+    else {
+        if (closestPoint >= 0) {
+            moving = closestPoint;
+        }
+        else {
+            var new_point = [x,y];
+
+            if (points.length < 2 || dist(points[0], new_point) > dist(points[points.length - 1], new_point)) {
+                points.push([x, y]);
+                moving = points.length - 1;
+            } else {
+                points.unshift([x, y]);
+                moving = 0;
+            }
+        }
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        draw_catmull_rom();
+        highlight_closest_point(x, y);
+    }
+
+    e.preventDefault();
+}
+
+document.body.onmouseup = function(e) {
+    moving = -1;
+}
+
+document.body.onmousemove = function(e) {
+    var x = e.x - canvas.getBoundingClientRect().left;
+    var y = e.y - canvas.getBoundingClientRect().top;
+
+    if (moving >= 0) {
+        points[moving][0] = x;
+        points[moving][1] = y;
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        draw_catmull_rom();
+    }
+
+    highlight_closest_point(x, y);
+}
+
+canvas.oncontextmenu = function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+}
+
+
+function highlight_closest_point(x, y) {
+
+    var closestDist = 40;
+    var ncp = -1;
+
+    if (points.length == 0) {
+        closestPoint = -1;
+        return;
+    }
+
+    for (var i = 0; i < points.length; i++) {
+        var dx = points[i][0] - x;
+        var dy = points[i][1] - y;
+        var dist = Math.sqrt(dx * dx + dy * dy);
+        
+        if (dist < closestDist) {
+            ncp = i;
+            closestDist = dist;
+        }
+    }
+
+    ctx.fillStyle = "#414859";
+    for (var i = 0; i < points.length; i++) {
+        draw_point(points[i]);
+    }
+    
+    if (ncp >= 0) {
+        ctx.fillStyle = "#678ff0";
+        draw_point(points[ncp]);
+    }
+
+    closestPoint = ncp;
+    return closestDist;
+}
+
+function draw_catmull_rom() {
+    if (points.length < 3)
+        return;
+    
+    var tangents = [];
+
+    for (var i = 1; i < points.length - 1; i++) {
+        var prev = points[i - 1];
+        var next = points[i + 1];
+        tangents[i] = [
+            (next[X] - prev[X]) / 2,
+            (next[Y] - prev[Y]) / 2
+        ];
+    }
+
+    var t0 = [
+        points[1][X] - tangents[1][X] / 3,
+        points[1][Y] - tangents[1][Y] / 3
+    ];
+
+    var l = points.length - 1;
+    var tl = [
+        points[l - 1][X] + tangents[l - 1][X] / 3,
+        points[l - 1][Y] + tangents[l - 1][Y] / 3
+    ];
+
+    var old_style = ctx.strokeStyle;
+    if (show_control_polygon)
+        ctx.strokeStyle = "#cccccc";
+
+    draw_quadratic(points[0], t0, points[1]);
+    draw_quadratic(points[l - 1], tl, points[l]);
+        
+    ctx.strokeStyle = old_style;
+
+    for (var i = 1; i < points.length - 2; i++) {
+        var p1 = points[i];
+        var p4 = points[i + 1];
+
+        var p2 = [
+            p1[0] + tangents[i][X] / 3,
+            p1[1] + tangents[i][Y] / 3
+        ];
+        var p3 = [
+            p4[0] - tangents[i + 1][X] / 3,
+            p4[1] - tangents[i + 1][Y] / 3
+        ];
+
+        if (show_control_polygon) {
+            ctx.strokeStyle = i % 2 == 0 ? "red" : "blue"; 
+            draw_line(p1, p2);
+            draw_line(p2, p3);
+            draw_line(p3, p4);
+            ctx.strokeStyle = old_style;
+        }
+        
+
+        draw_cubic(p1, p2, p3, p4);
+    }
+}
+
+function resizeCanvas() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    draw_catmull_rom();
+    highlight_closest_point(x, y);
+}
+
+
+
+    </script>
+    </body>
+</html>
